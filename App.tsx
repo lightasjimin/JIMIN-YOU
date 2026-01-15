@@ -81,6 +81,13 @@ const App: React.FC = () => {
   const pdfDocRef = useRef<pdfjsLib.PDFDocumentProxy | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const pageRefs = useRef<(HTMLDivElement | null)[]>([]);
+    return (
+    <div style={{ padding: '2rem', textAlign: 'center' }}>
+      <h1>Hello, 지민유!</h1>
+      <p>지금 화면이 잘 표시되고 있습니다 🎉</p>
+    </div>
+  );
+};
   const chatEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
 
