@@ -78,8 +78,6 @@ const App: React.FC = () => {
   const [lastBriefSummary, setLastBriefSummary] = useState<string | null>(null);
   const [isProcessingAI, setIsProcessingAI] = useState(false);
 
-const App: React.FC = () => {
-  // 모든 useState, useRef 등
   const pdfDocRef = useRef<pdfjsLib.PDFDocumentProxy | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const pageRefs = useRef<(HTMLDivElement | null)[]>([]);
