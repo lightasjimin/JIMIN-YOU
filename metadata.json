@@ -1,0 +1,7 @@
+{
+  "name": "Aidear - AI Tutor",
+  "description": "An AI-powered learning support system that integrates PDF viewing, handwriting notes, and real-time AI tutoring with automatic session summarization and quiz generation.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
