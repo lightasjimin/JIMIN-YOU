@@ -38,6 +38,7 @@ const App: React.FC = () => {
   const [highlighterColor, setHighlighterColor] = useState('rgba(255, 235, 59, 0.4)');
   const [highlighterWidth, setHighlighterWidth] = useState(15);
   const [eraserWidth, setEraserWidth] = useState(30);
+  const [showToolSettings, setShowToolSettings] = useState(false);
 
   // Report Data
   const [reportData, setReportData] = useState<{
@@ -153,38 +154,6 @@ const App: React.FC = () => {
     }
   };
 
-  // Session Management
-  const handleEndSession = async () => {
-    setShowEndSessionModal(false);
-    setIsGeneratingReport(true);
-    try {
-      let finalSummary: SessionSummary | null = null;
-      let finalQuizzes: QuizQuestion[] | null = null;
-
-      const pdfName = pdfFile?.name || "교재";
-      const notesCount = strokes.length.toString();
-
-      if (feedbackOptions.summary || feedbackOptions.points) {
-        finalSummary = await summarizeSession(pdfName, notesCount, transcript, {
-          summary: feedbackOptions.summary,
-          points: feedbackOptions.points
-        });
-      }
-
-      if (feedbackOptions.quiz) {
-        finalQuizzes = await generateQuiz(pdfName, transcript);
-      }
-
-      setReportData({ summary: finalSummary, quizzes: finalQuizzes });
-      setView('report');
-    } catch (e) {
-      console.error(e);
-      alert("리포트 생성 중 오류가 발생했습니다.");
-    } finally {
-      setIsGeneratingReport(false);
-    }
-  };
-
   // Folder Actions
   const handleConfirmFolder = () => {
     if (newFolderName.trim()) {
@@ -257,22 +226,48 @@ const App: React.FC = () => {
     setMovingNoteId(null);
   };
 
-  // PDF Rendering
-  const renderAllPages = async (pdfDoc: pdfjsLib.PDFDocumentProxy) => {
-    const images: string[] = [];
-    for (let i = 1; i <= pdfDoc.numPages; i++) {
-      const page = await pdfDoc.getPage(i);
-      const viewport = page.getViewport({ scale: 2.0 });
-      const canvas = document.createElement('canvas');
-      const context = canvas.getContext('2d');
-      canvas.height = viewport.height;
-      canvas.width = viewport.width;
-      if (context) {
-        await page.render({ canvasContext: context, viewport, canvas }).promise;
-        images.push(canvas.toDataURL('image/png'));
+  const handleEndSession = async () => {
+    setShowEndSessionModal(false);
+    setIsGeneratingReport(true);
+    try {
+      let finalSummary: SessionSummary | null = null;
+      let finalQuizzes: QuizQuestion[] | null = null;
+      const pdfName = pdfFile?.name || "교재";
+      const notesCount = strokes.length.toString();
+      if (feedbackOptions.summary || feedbackOptions.points) {
+        finalSummary = await summarizeSession(pdfName, notesCount, transcript, {
+          summary: feedbackOptions.summary,
+          points: feedbackOptions.points
+        });
+      }
+      if (feedbackOptions.quiz) {
+        finalQuizzes = await generateQuiz(pdfName, transcript);
+      }
+      setReportData({ summary: finalSummary, quizzes: finalQuizzes });
+      setView('report');
+    } catch (e) {
+      console.error(e);
+      alert("리포트 생성 중 오류가 발생했습니다.");
+    } finally {
+      setIsGeneratingReport(false);
+    }
+  };
+
+  const handleToolChange = (tool: ToolType) => {
+    if (activeTool === tool) {
+      if (tool !== ToolType.AI_PEN) {
+        setShowToolSettings(!showToolSettings);
+      }
+    } else {
+      setActiveTool(tool);
+      if (tool !== ToolType.AI_PEN) {
+        setShowToolSettings(true);
+        stopRecording();
+      } else {
+        setShowToolSettings(false);
+        startRecording();
       }
     }
-    setPageImages(images);
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -324,6 +319,23 @@ const App: React.FC = () => {
     } catch (e) { console.error(e); } finally { setIsProcessing(false); }
   };
 
+  const renderAllPages = async (pdfDoc: pdfjsLib.PDFDocumentProxy) => {
+    const images: string[] = [];
+    for (let i = 1; i <= pdfDoc.numPages; i++) {
+      const page = await pdfDoc.getPage(i);
+      const viewport = page.getViewport({ scale: 2.0 });
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      canvas.height = viewport.height;
+      canvas.width = viewport.width;
+      if (context) {
+        await page.render({ canvasContext: context, viewport, canvas }).promise;
+        images.push(canvas.toDataURL('image/png'));
+      }
+    }
+    setPageImages(images);
+  };
+
   const handleStrokeComplete = (stroke: Stroke) => {
     setStrokes(prev => [...prev, stroke]);
     if (stroke.type === ToolType.AI_PEN) analyzeAiPenArea(stroke);
@@ -355,11 +367,6 @@ const App: React.FC = () => {
     } catch (e) { console.error(e); } finally { setIsProcessingAI(false); }
   };
 
-  const handleToolChange = (tool: ToolType) => {
-    setActiveTool(tool);
-    if (tool !== ToolType.AI_PEN) stopRecording(); else startRecording();
-  };
-
   const filteredNotes = savedNotes.filter(n => {
     if (selectedFolderId === 'trash') return n.isDeleted;
     if (n.isDeleted) return false;
@@ -369,6 +376,7 @@ const App: React.FC = () => {
 
   const selectedFolder = folders.find(f => f.id === selectedFolderId);
 
+  // DASHBOARD VIEW
   if (view === 'dashboard') {
     return (
       <div className="min-h-screen bg-[#f3f4f6] flex flex-col font-sans">
@@ -389,6 +397,7 @@ const App: React.FC = () => {
             </label>
           </div>
         </header>
+
         <div className="flex flex-grow overflow-hidden">
           <aside className="w-64 bg-white border-r p-6 overflow-y-auto hidden md:block">
             <nav className="space-y-1">
@@ -415,6 +424,7 @@ const App: React.FC = () => {
               </div>
             </nav>
           </aside>
+
           <main className="flex-grow p-10 overflow-y-auto bg-gray-50/50">
             <div className="max-w-7xl mx-auto">
               <div className="flex items-center justify-between mb-10">
@@ -430,6 +440,7 @@ const App: React.FC = () => {
                   )}
                 </div>
               </div>
+
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-8">
                 {filteredNotes.map((note) => (
                   <div key={note.id} className="group flex flex-col space-y-3">
@@ -449,6 +460,23 @@ const App: React.FC = () => {
                           </>
                         )}
                       </div>
+                      {movingNoteId === note.id && (
+                        <div className="absolute inset-0 bg-white/95 p-4 overflow-y-auto z-10" onClick={e => e.stopPropagation()}>
+                          <div className="flex justify-between mb-4">
+                            <span className="text-[10px] font-black uppercase text-gray-400">폴더 이동</span>
+                            <button onClick={() => setMovingNoteId(null)}><i className="fas fa-times text-gray-400"></i></button>
+                          </div>
+                          <div className="space-y-2">
+                            <button onClick={() => handleMoveToFolder(note.id, undefined)} className="w-full text-left p-3 rounded-xl text-xs font-bold bg-gray-50 hover:bg-indigo-50">기본 보관함</button>
+                            {folders.map(f => (
+                              <button key={f.id} onClick={() => handleMoveToFolder(note.id, f.id)} className="w-full text-left p-3 rounded-xl text-xs font-bold bg-gray-50 hover:bg-indigo-50 flex items-center space-x-2">
+                                <i className="fas fa-circle text-[8px]" style={{ color: f.color }}></i>
+                                <span>{f.name}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                     <div className="px-1">
                       <h4 className="font-bold text-gray-800 text-sm truncate">{note.name}</h4>
@@ -463,16 +491,75 @@ const App: React.FC = () => {
             </div>
           </main>
         </div>
+
+        {/* Dash Modals */}
+        {(showFolderModal || showFolderRenameModal || showFolderDeleteModal || showRenameModal || showNoteDeleteModal) && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/40 backdrop-blur-sm">
+            <div className="bg-white rounded-[32px] p-8 w-full max-w-sm shadow-2xl">
+              {showFolderModal && (
+                <>
+                  <h3 className="text-xl font-black mb-6">새 폴더 만들기</h3>
+                  <input type="text" value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} className="w-full px-5 py-4 bg-gray-50 border rounded-2xl mb-6 outline-none focus:ring-2 ring-indigo-500" placeholder="폴더 이름" />
+                  <div className="flex space-x-3">
+                    <button onClick={() => setShowFolderModal(false)} className="flex-1 py-4 text-xs font-black text-gray-400">취소</button>
+                    <button onClick={handleConfirmFolder} className="flex-1 py-4 text-xs font-black bg-indigo-600 text-white rounded-2xl">생성</button>
+                  </div>
+                </>
+              )}
+              {showFolderRenameModal && (
+                <>
+                  <h3 className="text-xl font-black mb-6">폴더 이름 변경</h3>
+                  <input type="text" value={folderRenameValue} onChange={(e) => setFolderRenameValue(e.target.value)} className="w-full px-5 py-4 bg-gray-50 border rounded-2xl mb-6 outline-none focus:ring-2 ring-indigo-500" />
+                  <div className="flex space-x-3">
+                    <button onClick={() => setShowFolderRenameModal(false)} className="flex-1 py-4 text-xs font-black text-gray-400">취소</button>
+                    <button onClick={handleConfirmFolderRename} className="flex-1 py-4 text-xs font-black bg-indigo-600 text-white rounded-2xl">변경</button>
+                  </div>
+                </>
+              )}
+              {showFolderDeleteModal && (
+                <>
+                  <h3 className="text-xl font-black mb-2 text-red-600">폴더 삭제</h3>
+                  <p className="text-xs text-gray-500 mb-6 font-bold">폴더 안의 노트들은 전체 보관함으로 이동됩니다. 정말 삭제하시겠습니까?</p>
+                  <div className="flex space-x-3">
+                    <button onClick={() => setShowFolderDeleteModal(false)} className="flex-1 py-4 text-xs font-black text-gray-400">취소</button>
+                    <button onClick={handleConfirmDeleteFolder} className="flex-1 py-4 text-xs font-black bg-red-600 text-white rounded-2xl">삭제</button>
+                  </div>
+                </>
+              )}
+              {showRenameModal && (
+                <>
+                  <h3 className="text-xl font-black mb-6">노트 이름 변경</h3>
+                  <input type="text" value={newNoteName} onChange={(e) => setNewNoteName(e.target.value)} className="w-full px-5 py-4 bg-gray-50 border rounded-2xl mb-6 outline-none focus:ring-2 ring-indigo-500" />
+                  <div className="flex space-x-3">
+                    <button onClick={() => setShowRenameModal(false)} className="flex-1 py-4 text-xs font-black text-gray-400">취소</button>
+                    <button onClick={handleConfirmRename} className="flex-1 py-4 text-xs font-black bg-indigo-600 text-white rounded-2xl">변경</button>
+                  </div>
+                </>
+              )}
+              {showNoteDeleteModal && (
+                <>
+                  <h3 className="text-xl font-black mb-2 text-red-600">노트 영구 삭제</h3>
+                  <p className="text-xs text-gray-500 mb-6 font-bold">삭제된 노트는 복구할 수 없습니다. 계속하시겠습니까?</p>
+                  <div className="flex space-x-3">
+                    <button onClick={() => setShowNoteDeleteModal(false)} className="flex-1 py-4 text-xs font-black text-gray-400">취소</button>
+                    <button onClick={confirmPermanentDelete} className="flex-1 py-4 text-xs font-black bg-red-600 text-white rounded-2xl">영구 삭제</button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     );
   }
 
+  // REPORT VIEW
   if (view === 'report') {
     return (
-      <div className="min-h-screen bg-white flex flex-col font-sans overflow-y-auto">
-        <header className="h-20 bg-white border-b flex items-center justify-between px-12 sticky top-0 z-50">
+      <div className="h-screen bg-white flex flex-col font-sans">
+        <header className="h-20 bg-white border-b flex items-center justify-between px-12 shrink-0 z-50">
           <div className="flex items-center space-x-4">
-            <div className="w-10 h-10 bg-indigo-600 rounded-2xl flex items-center justify-center text-white"><i className="fas fa-chart-line"></i></div>
+            <div className="w-10 h-10 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-lg"><i className="fas fa-chart-line"></i></div>
             <h1 className="text-2xl font-black text-gray-900 tracking-tighter">학습 마무리 리포트</h1>
           </div>
           <div className="flex space-x-3">
@@ -480,88 +567,91 @@ const App: React.FC = () => {
             <button onClick={() => setView('dashboard')} className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-black hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all">대시보드로 돌아가기</button>
           </div>
         </header>
-        <main className="flex-grow max-w-4xl mx-auto w-full py-16 px-8">
-          {reportData.summary && reportData.summary.overview && (
-            <section className="mb-16 animate-in fade-in slide-in-from-bottom-4 duration-700">
-              <h2 className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.2em] mb-4">Summary</h2>
-              <div className="bg-indigo-50/50 p-8 rounded-[40px] border border-indigo-100">
-                <p className="text-xl font-bold text-gray-800 leading-relaxed">"{reportData.summary.overview}"</p>
-              </div>
-            </section>
-          )}
-          {reportData.summary && (reportData.summary.keyPoints.length > 0 || reportData.summary.examPoints.length > 0) && (
-            <section className="mb-16 grid grid-cols-1 md:grid-cols-2 gap-8">
-              {reportData.summary.keyPoints.length > 0 && (
-                <div>
-                  <h2 className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.2em] mb-6">Key Points</h2>
-                  <div className="space-y-4">
-                    {reportData.summary.keyPoints.map((point, i) => (
-                      <div key={i} className="flex items-start space-x-3 bg-gray-50 p-5 rounded-3xl border border-gray-100">
-                        <div className="w-6 h-6 bg-white rounded-lg flex items-center justify-center text-[10px] font-black text-indigo-600 shadow-sm">{i+1}</div>
-                        <p className="text-sm font-bold text-gray-700">{point}</p>
-                      </div>
-                    ))}
-                  </div>
+        <div className="flex-grow overflow-y-auto bg-gray-50/30">
+          <main className="max-w-4xl mx-auto w-full py-16 px-8 min-h-full">
+            {reportData.summary && reportData.summary.overview && (
+              <section className="mb-16 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                <h2 className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.2em] mb-4">Summary</h2>
+                <div className="bg-indigo-50/50 p-8 rounded-[40px] border border-indigo-100 shadow-sm">
+                  <p className="text-xl font-bold text-gray-800 leading-relaxed">"{reportData.summary.overview}"</p>
                 </div>
-              )}
-              {reportData.summary.examPoints.length > 0 && (
-                <div>
-                  <h2 className="text-[10px] font-black text-purple-600 uppercase tracking-[0.2em] mb-6">Exam Focus</h2>
-                  <div className="space-y-4">
-                    {reportData.summary.examPoints.map((point, i) => (
-                      <div key={i} className="flex items-start space-x-3 bg-purple-50 p-5 rounded-3xl border border-purple-100">
-                        <i className="fas fa-star text-purple-500 mt-1"></i>
-                        <p className="text-sm font-bold text-gray-700">{point}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </section>
-          )}
-          {reportData.quizzes && reportData.quizzes.length > 0 && (
-            <section className="mb-24">
-              <h2 className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.2em] mb-8">Review Quiz</h2>
-              <div className="space-y-12">
-                {reportData.quizzes.map((quiz, i) => (
-                  <div key={i} className="bg-white border-2 border-gray-100 p-8 rounded-[40px] relative overflow-hidden group hover:border-indigo-200 transition-all">
-                    <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity"><i className="fas fa-question text-6xl"></i></div>
-                    <p className="text-lg font-black text-gray-900 mb-6 leading-tight">Q{i+1}. {quiz.question}</p>
-                    {quiz.options && (
-                      <div className="grid grid-cols-1 gap-3 mb-8">
-                        {quiz.options.map((opt, oi) => (
-                          <div key={oi} className="px-6 py-4 bg-gray-50 rounded-2xl text-sm font-bold text-gray-600 border border-gray-100">{opt}</div>
-                        ))}
-                      </div>
-                    )}
-                    <details className="group/ans">
-                      <summary className="list-none cursor-pointer inline-flex items-center space-x-2 text-indigo-600 font-black text-xs uppercase tracking-widest bg-indigo-50 px-4 py-2 rounded-full hover:bg-indigo-100 transition-all">
-                        <span>정답 확인하기</span>
-                        <i className="fas fa-chevron-down text-[8px] group-open/ans:rotate-180 transition-transform"></i>
-                      </summary>
-                      <div className="mt-6 p-6 bg-indigo-600 text-white rounded-3xl animate-in zoom-in-95 duration-300">
-                        <div className="flex items-center space-x-2 mb-2">
-                          <i className="fas fa-check-circle"></i>
-                          <span className="font-black text-xs uppercase tracking-widest">Answer</span>
+              </section>
+            )}
+            {reportData.summary && (reportData.summary.keyPoints.length > 0 || reportData.summary.examPoints.length > 0) && (
+              <section className="mb-16 grid grid-cols-1 md:grid-cols-2 gap-8">
+                {reportData.summary.keyPoints.length > 0 && (
+                  <div>
+                    <h2 className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.2em] mb-6">Key Points</h2>
+                    <div className="space-y-4">
+                      {reportData.summary.keyPoints.map((point, i) => (
+                        <div key={i} className="flex items-start space-x-3 bg-white p-5 rounded-3xl border border-gray-100 shadow-sm transition-all hover:shadow-md">
+                          <div className="w-6 h-6 bg-indigo-50 rounded-lg flex items-center justify-center text-[10px] font-black text-indigo-600">{i+1}</div>
+                          <p className="text-sm font-bold text-gray-700">{point}</p>
                         </div>
-                        <p className="text-lg font-black mb-3">{quiz.answer}</p>
-                        <p className="text-sm font-bold text-indigo-100 leading-relaxed opacity-90">{quiz.explanation}</p>
-                      </div>
-                    </details>
+                      ))}
+                    </div>
                   </div>
-                ))}
-              </div>
-            </section>
-          )}
-          <div className="text-center pb-24 border-t pt-12">
-            <p className="text-gray-400 text-xs font-bold mb-6">오늘도 수고하셨습니다. Aidear와 함께 성장의 기록을 쌓아가세요.</p>
-            <button onClick={() => setView('dashboard')} className="px-12 py-4 bg-gray-900 text-white rounded-[24px] text-sm font-black hover:scale-105 transition-transform shadow-2xl">대시보드로 돌아가기</button>
-          </div>
-        </main>
+                )}
+                {reportData.summary.examPoints.length > 0 && (
+                  <div>
+                    <h2 className="text-[10px] font-black text-purple-600 uppercase tracking-[0.2em] mb-6">Exam Focus</h2>
+                    <div className="space-y-4">
+                      {reportData.summary.examPoints.map((point, i) => (
+                        <div key={i} className="flex items-start space-x-3 bg-white p-5 rounded-3xl border border-purple-100 shadow-sm transition-all hover:shadow-md">
+                          <i className="fas fa-star text-purple-500 mt-1"></i>
+                          <p className="text-sm font-bold text-gray-700">{point}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </section>
+            )}
+            {reportData.quizzes && reportData.quizzes.length > 0 && (
+              <section className="mb-24">
+                <h2 className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.2em] mb-8">Review Quiz</h2>
+                <div className="space-y-12">
+                  {reportData.quizzes.map((quiz, i) => (
+                    <div key={i} className="bg-white border border-gray-100 p-8 rounded-[40px] relative overflow-hidden group hover:border-indigo-200 transition-all shadow-sm">
+                      <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity"><i className="fas fa-question text-6xl"></i></div>
+                      <p className="text-lg font-black text-gray-900 mb-6 leading-tight">Q{i+1}. {quiz.question}</p>
+                      {quiz.options && (
+                        <div className="grid grid-cols-1 gap-3 mb-8">
+                          {quiz.options.map((opt, oi) => (
+                            <div key={oi} className="px-6 py-4 bg-gray-50 rounded-2xl text-sm font-bold text-gray-600 border border-gray-50">{opt}</div>
+                          ))}
+                        </div>
+                      )}
+                      <details className="group/ans">
+                        <summary className="list-none cursor-pointer inline-flex items-center space-x-2 text-indigo-600 font-black text-xs uppercase tracking-widest bg-indigo-50 px-4 py-2 rounded-full hover:bg-indigo-100 transition-all">
+                          <span>정답 확인하기</span>
+                          <i className="fas fa-chevron-down text-[8px] group-open/ans:rotate-180 transition-transform"></i>
+                        </summary>
+                        <div className="mt-6 p-6 bg-indigo-600 text-white rounded-3xl animate-in zoom-in-95 duration-300">
+                          <div className="flex items-center space-x-2 mb-2">
+                            <i className="fas fa-check-circle"></i>
+                            <span className="font-black text-xs uppercase tracking-widest">Answer</span>
+                          </div>
+                          <p className="text-lg font-black mb-3">{quiz.answer}</p>
+                          <p className="text-sm font-bold text-indigo-100 leading-relaxed opacity-90">{quiz.explanation}</p>
+                        </div>
+                      </details>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+            <div className="text-center pb-24 border-t pt-12">
+              <p className="text-gray-400 text-xs font-bold mb-6">오늘도 수고하셨습니다. Aidear와 함께 성장의 기록을 쌓아가세요.</p>
+              <button onClick={() => setView('dashboard')} className="px-12 py-4 bg-gray-900 text-white rounded-[24px] text-sm font-black hover:scale-105 transition-transform shadow-2xl">대시보드로 돌아가기</button>
+            </div>
+          </main>
+        </div>
       </div>
     );
   }
 
+  // SESSION VIEW
   return (
     <div className="flex h-screen w-full bg-white overflow-hidden font-sans relative">
       <div style={{ width: `${splitRatio}%` }} className="h-full flex flex-col bg-gray-50/30 border-r border-gray-100">
@@ -580,7 +670,7 @@ const App: React.FC = () => {
                 <span className="text-[10px] font-black uppercase tracking-widest">AI 펜</span>
               </button>
 
-              {(activeTool === ToolType.PEN || activeTool === ToolType.HIGHLIGHTER || activeTool === ToolType.ERASER) && (
+              {showToolSettings && (activeTool === ToolType.PEN || activeTool === ToolType.HIGHLIGHTER || activeTool === ToolType.ERASER) && (
                 <div className="absolute top-full mt-3 left-0 bg-white border border-gray-100 shadow-2xl rounded-2xl p-4 z-[60] flex flex-col space-y-4 animate-in slide-in-from-top-2 duration-200 w-48 max-h-[300px] overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-indigo-200">
                   {activeTool !== ToolType.ERASER && (
                     <div className="space-y-2">
@@ -611,7 +701,7 @@ const App: React.FC = () => {
                     </div>
                     <input 
                       type="range" 
-                      min={activeTool === ToolType.PEN ? "1" : activeTool === ToolType.HIGHLIGHTER ? "5" : "5"} 
+                      min={activeTool === ToolType.PEN ? "1" : "5"} 
                       max={activeTool === ToolType.PEN ? "10" : activeTool === ToolType.HIGHLIGHTER ? "40" : "100"} 
                       value={activeTool === ToolType.PEN ? penWidth : activeTool === ToolType.HIGHLIGHTER ? highlighterWidth : eraserWidth}
                       onChange={(e) => {
@@ -643,10 +733,10 @@ const App: React.FC = () => {
             </div>
           </div>
         </div>
-        <div ref={scrollContainerRef} className="flex-grow overflow-y-auto overflow-x-hidden p-6 bg-gray-100/30 scroll-smooth">
+        <div ref={scrollContainerRef} className="flex-grow overflow-y-auto overflow-x-hidden p-6 bg-gray-100/30 scroll-smooth" onClick={() => setShowToolSettings(false)}>
           <div className="flex flex-col items-center space-y-4 pb-24" style={{ transform: `scale(${scale})`, transformOrigin: 'top center' }}>
             {pageImages.map((img, idx) => (
-              <div key={idx} ref={el => { pageRefs.current[idx] = el; }} className="bg-white relative overflow-hidden flex-shrink-0">
+              <div key={idx} ref={el => { pageRefs.current[idx] = el; }} className="bg-white relative overflow-hidden flex-shrink-0 shadow-md">
                 <img src={img} className="w-full block select-none pointer-events-none" style={{ minWidth: '600px' }} />
                 <div className="absolute inset-0 z-10">
                   <Canvas 
