@@ -78,16 +78,25 @@ const App: React.FC = () => {
   const [lastBriefSummary, setLastBriefSummary] = useState<string | null>(null);
   const [isProcessingAI, setIsProcessingAI] = useState(false);
 
+const App: React.FC = () => {
+  // 모든 useState, useRef 등
   const pdfDocRef = useRef<pdfjsLib.PDFDocumentProxy | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const pageRefs = useRef<(HTMLDivElement | null)[]>([]);
-    return (
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const recognitionRef = useRef<any>(null);
+
+  // ✅ return은 마지막에 위치
+  return (
     <div style={{ padding: '2rem', textAlign: 'center' }}>
       <h1>Hello, 지민유!</h1>
       <p>지금 화면이 잘 표시되고 있습니다 🎉</p>
     </div>
   );
 };
+
+export default App;
+
   const chatEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
 
